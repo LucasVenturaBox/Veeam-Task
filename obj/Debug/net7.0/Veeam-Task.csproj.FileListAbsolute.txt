@@ -1,0 +1,14 @@
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\bin\Debug\net7.0\Veeam-Task.exe
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\bin\Debug\net7.0\Veeam-Task.deps.json
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\bin\Debug\net7.0\Veeam-Task.runtimeconfig.json
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\bin\Debug\net7.0\Veeam-Task.dll
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\bin\Debug\net7.0\Veeam-Task.pdb
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.AssemblyInfoInputs.cache
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.AssemblyInfo.cs
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.csproj.CoreCompileInputs.cache
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.dll
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\refint\Veeam-Task.dll
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.pdb
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\Veeam-Task.genruntimeconfig.cache
+C:\Users\Utilizador\Documents\GitHub\Veeam-Task\obj\Debug\net7.0\ref\Veeam-Task.dll
