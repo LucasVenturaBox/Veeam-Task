@@ -20,11 +20,10 @@ namespace VeeamTask
             if(!Directory.Exists(replicaDirectoryPath))
             {
                 Directory.CreateDirectory(replicaDirectoryPath);
-                Console.WriteLine("Hey, I just created and empty Replica File");
             }
             else
             {
-                Console.WriteLine("I didn't create the replica file, because it already existed!");
+                Console.WriteLine("Replica folder already exists");
             }
         }
 
@@ -34,26 +33,41 @@ namespace VeeamTask
             {
                 string workingDirectoryPath = Directory.GetCurrentDirectory();
                 string sourceDirectoryPath = Path.Combine(workingDirectoryPath, "Source");
-                Console.WriteLine($"The Source Directory Path is {sourceDirectoryPath}");
 
-                string[] allSourceFilePaths = Directory.GetFiles(sourceDirectoryPath);
-                string[] allSourceDirectoryPaths = Directory.GetDirectories(sourceDirectoryPath);
-                foreach (string filePath in allSourceFilePaths)
-                {
-                    string replicatedFilePath = Path.GetFileName(filePath);
-                    File.Copy(filePath, Path.Combine(replicaDirectoryPath, replicatedFilePath));
-                }
-
-                // Doesn't work for directories, only single files
-                // foreach (string directoryPath in allSourceDirectoryPaths)
-                // {
-                //     string replicatedDirectoryPath = Path.GetFileName(directoryPath);
-                //     File.Copy(directoryPath, Path.Combine(replicaDirectoryPath, replicatedDirectoryPath));
-                // }
+                CopyEveryFileInDirectory(sourceDirectoryPath, replicaDirectoryPath);
                 
-                Console.WriteLine("Replica File is initialized");
             }
 
+        }
+
+        private static void CopyEveryFileInDirectory(string sourceDirectory, string destinationPath)
+        {
+            string[] allSourceFilePaths = Directory.GetFiles(sourceDirectory);
+            string[] allSourceDirectoryPaths = Directory.GetDirectories(sourceDirectory);
+            foreach (string filePath in allSourceFilePaths)
+            {
+                string replicatedFilePath = Path.GetFileName(filePath);
+                string newFile = Path.Combine(destinationPath, replicatedFilePath);
+                
+                if (!File.Exists(newFile))
+                {
+                    File.Copy(filePath, newFile);
+                }
+            }
+
+            if (allSourceDirectoryPaths.Length > 0)
+            {
+                foreach (string directory in allSourceDirectoryPaths)
+                {
+                    string replicatedDirectoryPath = Path.GetFileName(directory);
+                    string newFolder = Path.Combine(destinationPath, replicatedDirectoryPath);
+                    if (!File.Exists(newFolder))
+                    {
+                        Directory.CreateDirectory(newFolder);
+                        CopyEveryFileInDirectory(directory, newFolder);
+                    }
+                }
+            }
         }
 
     }
