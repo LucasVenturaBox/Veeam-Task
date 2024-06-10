@@ -1,6 +1,8 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Timers;
 
 namespace VeeamTask
@@ -30,7 +32,7 @@ namespace VeeamTask
         private static void AskForArguments()
         {
             Console.WriteLine("Please input the path of the folder to be copied, the source.");
-            string providedSourcePath = Console.ReadLine();
+            string providedSourcePath = Console.ReadLine()?.ToString() ?? "Invalid string";
             if(Path.Exists(providedSourcePath))
             {
                 Console.WriteLine("The path is valid.\n");
@@ -45,7 +47,7 @@ namespace VeeamTask
             }
 
             Console.WriteLine("Please input the path of the intended destination folder, the replica.");
-            string providedReplicaPath = Console.ReadLine();
+            string providedReplicaPath = Console.ReadLine()?.ToString() ?? "Invalid string";
             if(!Path.Exists(providedReplicaPath))
             {
                 Console.WriteLine("The path is valid.\n");
@@ -59,7 +61,7 @@ namespace VeeamTask
             }
 
             Console.WriteLine("Please input the folder synchronization interval, in seconds.");
-            int? providedInterval = Convert.ToInt32(Console.ReadLine());
+            int providedInterval = Convert.ToInt32(Console.ReadLine());
             if(providedInterval >= 1)
             {
                 Console.WriteLine("The interval is valid.\n");
@@ -71,6 +73,20 @@ namespace VeeamTask
                 
                 _timer = new System.Timers.Timer(3000);
             }
+
+            // Console.WriteLine("Please input the path of the intended destination folder, the replica.");
+            // string providedLogPath = Console.ReadLine()?.ToString() ?? "Invalid string";
+            // if(!Path.Exists(providedReplicaPath))
+            // {
+            //     Console.WriteLine("The path is valid.\n");
+            //     _replicaFolderPath = providedReplicaPath;
+            // }
+            // else
+            // {
+            //     Console.WriteLine("The path is not valid, we will proceed with the default destination, the desktop.\n");
+            //    string newFolder = "Replica";
+            //     _replicaFolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), newFolder);
+            // }
 
             Console.WriteLine($"These are the values:\n Source: {_sourceFolderPath}\n Replica: {_replicaFolderPath}\n Sync Interval: {_timer.Interval/1000} seconds\n\nPress enter to continue");
             Console.ReadLine();
@@ -185,7 +201,7 @@ namespace VeeamTask
             Console.WriteLine($"It updates every {_timer.Interval / 1000} seconds");
             //if the replica folder is different from the source, add the missing folders and/or remove an additional folder
             SyncFolders(_sourceFolderPath, _replicaFolderPath);
-
+            CycleThroughEverySourceFile(_sourceFolderPath,_replicaFolderPath);
         }
 
         private static void SyncFolders(string sourcePath, string folderToSyncPath)
@@ -242,7 +258,40 @@ namespace VeeamTask
             }
         }
 
-        private static List<string> GetFileNames(string[] filePaths)
+       
+        private static void CycleThroughEverySourceFile(string sourcePath, string replicaPath)
+        {
+            List<string> allSourceFilesNames = GetFileNames(Directory.GetFiles(sourcePath));
+            List<string> allSourceFoldersNames = GetFileNames(Directory.GetDirectories(sourcePath));
+
+            foreach (string fileName in allSourceFilesNames)
+            {
+                string originalFilePath = Path.Combine(sourcePath, fileName);
+                string destinationFilePath = Path.Combine(replicaPath, fileName);
+                
+                if (File.Exists(originalFilePath) && File.Exists(destinationFilePath))
+                {
+                    if(WasFileModified(originalFilePath, destinationFilePath))
+                    {
+                        File.Delete(destinationFilePath);
+                        File.Copy(originalFilePath, destinationFilePath);
+                    }
+                }
+            } 
+
+            foreach (string folderName in allSourceFoldersNames)
+            {
+                string originalFolderPath = Path.Combine(sourcePath, folderName);
+                string destinationFilePath = Path.Combine(replicaPath, folderName);
+                
+                if (Directory.Exists(originalFolderPath) && Directory.Exists(destinationFilePath))
+                {
+                    CycleThroughEverySourceFile(originalFolderPath, destinationFilePath);
+                }
+            }
+        }
+
+         private static List<string> GetFileNames(string[] filePaths)
         {
             List<string> fileNames = new List<string>();
             foreach(string file in filePaths)
@@ -252,6 +301,30 @@ namespace VeeamTask
 
             return fileNames;
         }
+
+        private static bool WasFileModified(string sourceFilePath, string replicatedFilePath)
+        {
+            MD5 md5Instance = MD5.Create();
+
+            byte[] sourceBuffer = File.ReadAllBytes(sourceFilePath);
+            string sourceHash = BitConverter.ToString(md5Instance.ComputeHash(sourceBuffer));
+
+            byte[] replicatedBuffer = File.ReadAllBytes(replicatedFilePath);
+            string replicatedHash = BitConverter.ToString(md5Instance.ComputeHash(replicatedBuffer));
+
+            
+            if(sourceHash != replicatedHash)
+            {
+                Console.WriteLine($"This replicated file's content {replicatedFilePath} doesn't match the source's content {sourceFilePath}");
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+
+        }
+
 
     }
 }
