@@ -8,16 +8,25 @@ namespace VeeamTask
     public class Program
     {
         private static string _sourceFolderPath = "";
-        private static string _replicaDirectoryPath = "";
-        private static System.Timers.Timer _timer = new System.Timers.Timer(5000); //5 seconds = 5000 miliseconds
+        private static string _replicaFolderPath = "";
+        private static System.Timers.Timer _timer;
         public static void Main(string[] args)
         {
             AskForArguments();
             CreateReplicaDirectory();
             PopulateReplica();
+
+            _timer.Elapsed += UpdateReplicaFolder;
+            _timer.Enabled = true;
+
+            Console.WriteLine("Press enter to exit the program");
+            Console.ReadLine();
+            _timer.Stop();
+            _timer.Dispose();
+
         }
 
-        #region Initial setup
+        #region Initial Setup
         private static void AskForArguments()
         {
             Console.WriteLine("Please input the path of the folder to be copied, the source.");
@@ -40,21 +49,21 @@ namespace VeeamTask
             if(!Path.Exists(providedReplicaPath))
             {
                 Console.WriteLine("The path is valid.\n");
-                _replicaDirectoryPath = providedReplicaPath;
+                _replicaFolderPath = providedReplicaPath;
             }
             else
             {
                 Console.WriteLine("The path is not valid, we will proceed with the default destination, the desktop.\n");
                string newFolder = "Replica";
-                _replicaDirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), newFolder);
+                _replicaFolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), newFolder);
             }
 
-            Console.WriteLine("Please input the folder synchronization interval, in miliseconds.");
-            int providedInterval = Convert.ToInt32(Console.ReadLine());
+            Console.WriteLine("Please input the folder synchronization interval, in seconds.");
+            int? providedInterval = Convert.ToInt32(Console.ReadLine());
             if(providedInterval >= 1)
             {
                 Console.WriteLine("The interval is valid.\n");
-                _timer = new System.Timers.Timer(providedInterval*1000);
+                _timer = new System.Timers.Timer((double)providedInterval*1000);
             }
             else
             {
@@ -63,15 +72,15 @@ namespace VeeamTask
                 _timer = new System.Timers.Timer(3000);
             }
 
-            Console.WriteLine($"These are the values:\n Source: {_sourceFolderPath}\n Replica: {_replicaDirectoryPath}\n Sync Interval: {_timer.Interval/1000} seconds\n\nPress enter to continue");
+            Console.WriteLine($"These are the values:\n Source: {_sourceFolderPath}\n Replica: {_replicaFolderPath}\n Sync Interval: {_timer.Interval/1000} seconds\n\nPress enter to continue");
             Console.ReadLine();
         }
 
         private static void CreateReplicaDirectory()
         {
-            if(!Directory.Exists(_replicaDirectoryPath))
+            if(!Directory.Exists(_replicaFolderPath))
             {
-                Directory.CreateDirectory(_replicaDirectoryPath);
+                Directory.CreateDirectory(_replicaFolderPath);
             }
             else
             {
@@ -81,49 +90,168 @@ namespace VeeamTask
 
         private static void PopulateReplica()
         {
-            if(!string.IsNullOrEmpty(_replicaDirectoryPath) && !string.IsNullOrEmpty(_sourceFolderPath))
+            if(!string.IsNullOrEmpty(_replicaFolderPath) && !string.IsNullOrEmpty(_sourceFolderPath))
             {
-                CopyEveryFileInDirectory(_sourceFolderPath, _replicaDirectoryPath);
+                CopyEveryFileInDirectory(_sourceFolderPath, _replicaFolderPath);
             }
 
         }
         #endregion
 
+        #region File Utils
         private static void CopyEveryFileInDirectory(string sourceDirectory, string destinationPath)
         {
-            string[] allSourceFilePaths = Directory.GetFiles(sourceDirectory);
-            string[] allSourceDirectoryPaths = Directory.GetDirectories(sourceDirectory);
-            foreach (string filePath in allSourceFilePaths)
+            if (Path.Exists(sourceDirectory))
             {
-                string replicatedFilePath = Path.GetFileName(filePath);
-                string newFile = Path.Combine(destinationPath, replicatedFilePath);
+                List<string> allSourceFilePaths = GetFileNames(Directory.GetFiles(sourceDirectory));
+                List<string> allSourceFolderPaths = GetFileNames(Directory.GetDirectories(sourceDirectory));
 
-                if (!File.Exists(newFile))
-                {
-                    File.Copy(filePath, newFile);
-                    Console.WriteLine($"A new file called {replicatedFilePath} was created on {newFile}");
+                CopyFilesFromSourceToDestination(sourceDirectory, destinationPath, allSourceFilePaths);
 
-                }
+                CopyFoldersFromSourceToDestination(sourceDirectory, destinationPath, allSourceFolderPaths);
+
             }
+        }
 
-            if (allSourceDirectoryPaths.Length > 0)
+        private static void CopyFilesFromSourceToDestination(string sourcePath, string destinationPath, List<string> allSourceFileNames)
+        {
+            foreach (string filePath in allSourceFileNames)
             {
-                foreach (string directory in allSourceDirectoryPaths)
-                {
-                    string replicatedDirectoryPath = Path.GetFileName(directory);
-                    string newFolder = Path.Combine(destinationPath, replicatedDirectoryPath);
-                    if (!File.Exists(newFolder))
-                    {
-                        Directory.CreateDirectory(newFolder);
-                        Console.WriteLine($"A new folder called {replicatedDirectoryPath} was created on {newFolder}");
+                string originalFilePath = Path.Combine(sourcePath, filePath);
+                string destinationFilePath = Path.Combine(destinationPath, filePath);
 
-                        CopyEveryFileInDirectory(directory, newFolder);
-                    }
+                if (!File.Exists(destinationFilePath))
+                {
+                    File.Copy(originalFilePath, destinationFilePath);
+                    Console.WriteLine($"A new file called {filePath} was copied to {destinationFilePath}");
+
                 }
             }
         }
 
-        
+        private static void DeleteFilesFromDestination(string destinationPath, List<string> allDestinationFileNames)
+        {
+            foreach (string filePath in allDestinationFileNames)
+            {
+                string destinationFilePath = Path.Combine(destinationPath, filePath);
+
+                if (File.Exists(destinationFilePath))
+                {
+                    File.Delete(destinationFilePath);
+                    Console.WriteLine($"A new file called {filePath} was deleted from {destinationFilePath}");
+
+                }
+            }
+        }
+
+        #endregion
+
+
+        #region Folder Utils
+        private static void CopyFoldersFromSourceToDestination(string sourcePath, string destinationPath, List<string> allSourceFolderNames)
+        {
+            foreach (string directory in allSourceFolderNames)
+            {
+                string originalFolderPath = Path.Combine(sourcePath, directory);
+                string destinationFilePath = Path.Combine(destinationPath, directory);
+                
+                if (!Directory.Exists(destinationFilePath))
+                {
+                    Directory.CreateDirectory(destinationFilePath);
+                    Console.WriteLine($"A new folder called {directory} was copied to {destinationFilePath}");
+
+                    CopyEveryFileInDirectory(originalFolderPath, destinationFilePath);
+                }
+            }
+        }
+
+        private static void DeleteFoldersFromDestination( string destinationPath, List<string> allDestinationFolderNames)
+        {
+            foreach (string directory in allDestinationFolderNames)
+            {
+                string destinationFilePath = Path.Combine(destinationPath, directory);
+                if (Directory.Exists(destinationFilePath))
+                {
+                    Directory.Delete(destinationFilePath, true);
+                    Console.WriteLine($"A new folder called {directory} was deleted from {destinationFilePath}");
+                }
+            }
+        }
+
+        #endregion
+
+        private static void UpdateReplicaFolder(Object source, ElapsedEventArgs e)
+        {
+            Console.WriteLine($"It updates every {_timer.Interval / 1000} seconds");
+            //if the replica folder is different from the source, add the missing folders and/or remove an additional folder
+            SyncFolders(_sourceFolderPath, _replicaFolderPath);
+
+        }
+
+        private static void SyncFolders(string sourcePath, string folderToSyncPath)
+        {
+            if (Path.Exists(sourcePath))
+            {
+                //Source files and directiories paths
+                
+                List<string> allSourceFileNames = GetFileNames(Directory.GetFiles(sourcePath));
+                List<string> allSourceDirectoryNames = GetFileNames(Directory.GetDirectories(sourcePath));
+                
+                //Folder to sync files and directiories paths
+                List<string> allFolderToSyncFileNames = GetFileNames(Directory.GetFiles(folderToSyncPath));
+                List<string> allFolderToSyncDirectoryNames = GetFileNames(Directory.GetDirectories(folderToSyncPath));
+
+                //Files
+                List<string> fileNamesToAdd = allSourceFileNames.Except(allFolderToSyncFileNames).ToList();
+                List<string> fileNamesToRemove = allFolderToSyncFileNames.Except(allSourceFileNames).ToList();
+
+                //Folders
+                List<string> folderNamesToAdd = allSourceDirectoryNames.Except(allFolderToSyncDirectoryNames).ToList();
+                List<string> folderNamesToRemove = allFolderToSyncDirectoryNames.Except(allSourceDirectoryNames).ToList();
+
+                if(fileNamesToAdd.Any())
+                {
+                    CopyFilesFromSourceToDestination(sourcePath,folderToSyncPath, fileNamesToAdd);
+                }
+
+                if(fileNamesToRemove.Any())
+                {
+                    DeleteFilesFromDestination(folderToSyncPath, fileNamesToRemove);
+                }
+
+                if(folderNamesToAdd.Any())
+                {
+                    CopyFoldersFromSourceToDestination(sourcePath,folderToSyncPath, folderNamesToAdd);
+                }
+
+                if(folderNamesToRemove.Any())
+                {
+                    DeleteFoldersFromDestination(folderToSyncPath,folderNamesToRemove);
+                }
+
+                if(allSourceDirectoryNames.Any())
+                {
+                    foreach (var sourceDirectoryName in allSourceDirectoryNames)
+                    {
+                        string sourceDirectoryPath = Path.Combine(sourcePath, sourceDirectoryName);
+                        string folderToSyncInDirectoryPath = Path.Combine(folderToSyncPath, sourceDirectoryName);
+                        SyncFolders(sourceDirectoryPath,folderToSyncInDirectoryPath);
+                    }
+                }
+                
+            }
+        }
+
+        private static List<string> GetFileNames(string[] filePaths)
+        {
+            List<string> fileNames = new List<string>();
+            foreach(string file in filePaths)
+            {
+                fileNames.Add(Path.GetFileName(file));
+            }
+
+            return fileNames;
+        }
 
     }
 }
