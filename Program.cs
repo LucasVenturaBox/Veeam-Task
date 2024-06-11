@@ -1,9 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Security.Cryptography;
-using System.Text;
-using System.Timers;
+﻿using System.Timers;
 
 namespace VeeamTask
 {
@@ -11,9 +6,8 @@ namespace VeeamTask
     {
         private static string _sourceFolderPath = default!;
         private static string _replicaFolderPath = default!;
-        private static string _logFilePath = default!;
+        private static Log _logFile = default!;
         private static System.Timers.Timer _timer = default!;
-        private static List<string> _logLines = new List<string>();
         public static void Main(string[] args)
         {
             AskForArguments();
@@ -25,18 +19,42 @@ namespace VeeamTask
 
             Console.WriteLine("Press enter to exit the program");
             Console.ReadLine();
+            _logFile?.AddLinesToLog("Exited the program!");
             _timer.Stop();
             _timer.Dispose();
 
         }
 
-        #region Initial Setup
+        #region Initiallization Setup
         private static void AskForArguments()
         {
             //Source Path
+            ManageProvidedSourcePath();
+
+            //Replica Path
+            ManageProvidedReplicaPath();
+
+            //Log File
+            ManageProvidedLogPath();
+
+            //Sync Interval
+            ManageProvideInterval();
+
+            string setupValuesMessage = $"These are the values:\n Source: {_sourceFolderPath}\n Replica: {_replicaFolderPath}\n LogFile: {_logFile}\n Sync Interval: {_timer.Interval / 1000} seconds\n";
+
+            FileUtils.WriteToLogAndConsole(setupValuesMessage, _logFile);
+
+            Console.WriteLine("\n Press enter to continue");
+            Console.ReadLine();
+        }
+
+        #region User Inputs
+        private static void ManageProvidedSourcePath()
+        {
             Console.WriteLine("Please input the path of the folder to be copied, the source.");
             string providedSourcePath = Console.ReadLine()?.ToString() ?? "Invalid string";
-            if(Path.Exists(providedSourcePath))
+
+            if (Path.Exists(providedSourcePath))
             {
                 _sourceFolderPath = providedSourcePath;
                 Console.WriteLine($"The path {_sourceFolderPath} is valid.\n");
@@ -48,13 +66,16 @@ namespace VeeamTask
                 _sourceFolderPath = sourceDirectoryPath;
                 Console.WriteLine($"The path is NOT valid, we will proceed with the sample folder on {_sourceFolderPath}.\n");
             }
-
-            //Replica Path
-            Console.WriteLine("Please input the path of the intended destination folder, the replica.");
+        }
+        
+        private static void ManageProvidedReplicaPath()
+        {
+             Console.WriteLine("Please input the path of the intended destination folder, the replica.");
             string providedReplicaPath = Console.ReadLine()?.ToString() ?? "Invalid string";
-            if(providedReplicaPath == "Invalid string" || providedReplicaPath == _sourceFolderPath)
+
+            if (providedReplicaPath == "Invalid string" || providedReplicaPath == _sourceFolderPath)
             {
-                _replicaFolderPath =Path.Combine(Directory.GetCurrentDirectory(), "Replica");
+                _replicaFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "Replica");
                 Console.WriteLine($"The path is NOT valid, replica will be created on {_replicaFolderPath}.\n");
             }
             else
@@ -62,160 +83,64 @@ namespace VeeamTask
                 _replicaFolderPath = providedReplicaPath;
                 Console.WriteLine($"The path {_replicaFolderPath} is valid.\n");
             }
+        }
 
-            //Log File
+        private static void ManageProvidedLogPath()
+        {
             Console.WriteLine("Please input the path of the Log File");
             string providedLogPath = Console.ReadLine()?.ToString() ?? "Invalid string";
-            if(providedLogPath == "Invalid string" || providedLogPath == _sourceFolderPath || providedLogPath == _replicaFolderPath)
+
+            if (providedLogPath == "Invalid string" || providedLogPath == _sourceFolderPath || providedLogPath == _replicaFolderPath)
             {
-                _logFilePath =Path.Combine(Directory.GetCurrentDirectory(), "Log.txt");
-                Console.WriteLine($"The path is NOT valid, Log File will be created on {_logFilePath}.\n");
+                string logFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Log.txt");
+                _logFile = new Log(logFilePath);
+
+                Console.WriteLine($"The path is NOT valid, Log File will be created on {logFilePath}.\n");
             }
             else
             {
-                _logFilePath = providedLogPath + ".txt";
-                Console.WriteLine($"The path {_logFilePath} is valid.\n");
+                string logFilePath = providedLogPath + ".txt";
+                _logFile = new Log(logFilePath);
+                Console.WriteLine($"The path {logFilePath} is valid.\n");
             }
+        }
 
-            //Sync Interval
+        private static void ManageProvideInterval()
+        {
             Console.WriteLine("Please input the folder synchronization interval, in seconds.");
             string providedInterval = Console.ReadLine()?.ToString() ?? "Invalid string";
+
             int intervalInSeconds;
-            if(int.TryParse(providedInterval,out intervalInSeconds) && intervalInSeconds >= 1)
+            if (int.TryParse(providedInterval, out intervalInSeconds) && intervalInSeconds >= 1)
             {
-                _timer = new System.Timers.Timer((double)intervalInSeconds*1000);
-                Console.WriteLine($"The interval{_timer.Interval/1000} is valid.\n");
+                _timer = new System.Timers.Timer((double)intervalInSeconds * 1000);
+                Console.WriteLine($"The interval{_timer.Interval / 1000} is valid.\n");
             }
             else
             {
                 Console.WriteLine("The interval is too small, we will proceed with the default value, 3 seconds.\n");
-                
+
                 _timer = new System.Timers.Timer(3000);
             }
-
-            string setupValuesMessage = $"These are the values:\n Source: {_sourceFolderPath}\n Replica: {_replicaFolderPath}\n LogFile: {_logFilePath}\n Sync Interval: {_timer.Interval/1000} seconds\n";
-           
-            AddLinesToLog(_logFilePath, setupValuesMessage);
-            Console.WriteLine(setupValuesMessage + "\n Press enter to continue");
-            
-
-            Console.ReadLine();
         }
+
+        #endregion
 
         private static void CreateReplicaDirectory()
         {
             Directory.CreateDirectory(_replicaFolderPath);
             string replicaCreatedMessage = $"Replica folder has been created on {_replicaFolderPath}";
-            AddLinesToLog(_logFilePath, replicaCreatedMessage);
-            Console.WriteLine(replicaCreatedMessage);
+            FileUtils.WriteToLogAndConsole(replicaCreatedMessage, _logFile);
         }
 
         private static void PopulateReplica()
         {
             if(!string.IsNullOrEmpty(_replicaFolderPath) && !string.IsNullOrEmpty(_sourceFolderPath))
             {
-                CopyEveryFileInDirectory(_sourceFolderPath, _replicaFolderPath);
+                FileUtils.CopyEveryFileInDirectory(_sourceFolderPath, _replicaFolderPath,_logFile);
             }
 
         }
-        #endregion
-
-        #region File Utils
-        private static void CopyEveryFileInDirectory(string sourceDirectory, string destinationPath)
-        {
-            if (Path.Exists(sourceDirectory))
-            {
-                List<string> allSourceFilePaths = GetFileNames(Directory.GetFiles(sourceDirectory));
-                List<string> allSourceFolderPaths = GetFileNames(Directory.GetDirectories(sourceDirectory));
-
-                CopyFilesFromSourceToDestination(sourceDirectory, destinationPath, allSourceFilePaths);
-
-                CopyFoldersFromSourceToDestination(sourceDirectory, destinationPath, allSourceFolderPaths);
-
-            }
-        }
-
-        private static void CopyFilesFromSourceToDestination(string sourcePath, string destinationPath, List<string> allSourceFileNames)
-        {
-            foreach (string filePath in allSourceFileNames)
-            {
-                string originalFilePath = Path.Combine(sourcePath, filePath);
-                string destinationFilePath = Path.Combine(destinationPath, filePath);
-
-                if (!File.Exists(destinationFilePath))
-                {
-                    File.Copy(originalFilePath, destinationFilePath);
-                    
-                    string fileCreatedMessage = $"The file {originalFilePath} was copied to {destinationFilePath}";
-
-                    AddLinesToLog(_logFilePath, fileCreatedMessage);
-                    Console.WriteLine(fileCreatedMessage);
-
-                }
-            }
-        }
-
-        private static void DeleteFilesFromDestination(string destinationPath, List<string> allDestinationFileNames)
-        {
-            foreach (string filePath in allDestinationFileNames)
-            {
-                string destinationFilePath = Path.Combine(destinationPath, filePath);
-
-                if (File.Exists(destinationFilePath))
-                {
-                    File.Delete(destinationFilePath);
-
-                    string fileDeletedMessage =$"A file called {filePath} was deleted from {destinationFilePath}";
-
-                    AddLinesToLog(_logFilePath, fileDeletedMessage);
-                    Console.WriteLine(fileDeletedMessage);
-
-                }
-            }
-        }
-
-        #endregion
-
-
-        #region Folder Utils
-        private static void CopyFoldersFromSourceToDestination(string sourcePath, string destinationPath, List<string> allSourceFolderNames)
-        {
-            foreach (string directory in allSourceFolderNames)
-            {
-                string originalFolderPath = Path.Combine(sourcePath, directory);
-                string destinationFolderPath = Path.Combine(destinationPath, directory);
-                
-                if (!Directory.Exists(destinationFolderPath))
-                {
-                    Directory.CreateDirectory(destinationFolderPath);
-
-                    string createdFolderMessage = $"The folder {originalFolderPath} was copied to {destinationFolderPath}";
-
-                    AddLinesToLog(_logFilePath, createdFolderMessage);
-                    Console.WriteLine(createdFolderMessage);
-
-                    CopyEveryFileInDirectory(originalFolderPath, destinationFolderPath);
-                }
-            }
-        }
-
-        private static void DeleteFoldersFromDestination( string destinationPath, List<string> allDestinationFolderNames)
-        {
-            foreach (string directory in allDestinationFolderNames)
-            {
-                string destinationFilePath = Path.Combine(destinationPath, directory);
-                if (Directory.Exists(destinationFilePath))
-                {
-                    Directory.Delete(destinationFilePath, true);
-
-                    string deletedFolderMessage = $"A folder called {directory} was deleted from {destinationFilePath}";
-
-                    AddLinesToLog(_logFilePath, deletedFolderMessage);
-                    Console.WriteLine(deletedFolderMessage);
-                }
-            }
-        }
-
         #endregion
 
         private static void UpdateReplicaFolder(Object? source, ElapsedEventArgs e)
@@ -230,12 +155,12 @@ namespace VeeamTask
             {
                 //Source files and directiories paths
                 
-                List<string> allSourceFileNames = GetFileNames(Directory.GetFiles(sourcePath));
-                List<string> allSourceDirectoryNames = GetFileNames(Directory.GetDirectories(sourcePath));
+                List<string> allSourceFileNames = FileUtils.GetFileNames(Directory.GetFiles(sourcePath));
+                List<string> allSourceDirectoryNames = FileUtils.GetFileNames(Directory.GetDirectories(sourcePath));
                 
                 //Folder to sync files and directiories paths
-                List<string> allFolderToSyncFileNames = GetFileNames(Directory.GetFiles(folderToSyncPath));
-                List<string> allFolderToSyncDirectoryNames = GetFileNames(Directory.GetDirectories(folderToSyncPath));
+                List<string> allFolderToSyncFileNames = FileUtils.GetFileNames(Directory.GetFiles(folderToSyncPath));
+                List<string> allFolderToSyncDirectoryNames = FileUtils.GetFileNames(Directory.GetDirectories(folderToSyncPath));
 
                 //Files
                 List<string> fileNamesToAdd = allSourceFileNames.Except(allFolderToSyncFileNames).ToList();
@@ -247,22 +172,22 @@ namespace VeeamTask
 
                 if(fileNamesToAdd.Any())
                 {
-                    CopyFilesFromSourceToDestination(sourcePath,folderToSyncPath, fileNamesToAdd);
+                    FileUtils.CopyFilesFromSourceToDestination(sourcePath,folderToSyncPath, fileNamesToAdd, _logFile);
                 }
 
                 if(fileNamesToRemove.Any())
                 {
-                    DeleteFilesFromDestination(folderToSyncPath, fileNamesToRemove);
+                    FileUtils.DeleteFilesFromDestination(folderToSyncPath, fileNamesToRemove, _logFile);
                 }
 
                 if(folderNamesToAdd.Any())
                 {
-                    CopyFoldersFromSourceToDestination(sourcePath,folderToSyncPath, folderNamesToAdd);
+                    FileUtils.CopyFoldersFromSourceToDestination(sourcePath,folderToSyncPath, folderNamesToAdd, _logFile);
                 }
 
                 if(folderNamesToRemove.Any())
                 {
-                    DeleteFoldersFromDestination(folderToSyncPath,folderNamesToRemove);
+                    FileUtils.DeleteFoldersFromDestination(folderToSyncPath,folderNamesToRemove, _logFile);
                 }
 
                 if(allSourceDirectoryNames.Any())
@@ -281,8 +206,8 @@ namespace VeeamTask
        
         private static void CycleThroughEverySourceFile(string sourcePath, string replicaPath)
         {
-            List<string> allSourceFilesNames = GetFileNames(Directory.GetFiles(sourcePath));
-            List<string> allSourceFoldersNames = GetFileNames(Directory.GetDirectories(sourcePath));
+            List<string> allSourceFilesNames = FileUtils.GetFileNames(Directory.GetFiles(sourcePath));
+            List<string> allSourceFoldersNames = FileUtils.GetFileNames(Directory.GetDirectories(sourcePath));
 
             foreach (string fileName in allSourceFilesNames)
             {
@@ -291,15 +216,14 @@ namespace VeeamTask
                 
                 if (File.Exists(originalFilePath) && File.Exists(destinationFilePath))
                 {
-                    if(WasFileModified(originalFilePath, destinationFilePath))
+                    if(FileUtils.WasFileModified(originalFilePath, destinationFilePath))
                     {
                         File.Delete(destinationFilePath);
                         File.Copy(originalFilePath, destinationFilePath);
 
                         string fileUpdatedMessage = $"The file :{destinationFilePath} has just been updated, to match the source file {originalFilePath}";
 
-                        AddLinesToLog(_logFilePath, fileUpdatedMessage);
-                        Console.WriteLine(fileUpdatedMessage);
+                        FileUtils.WriteToLogAndConsole(fileUpdatedMessage, _logFile);
                     }
                 }
             } 
@@ -316,57 +240,8 @@ namespace VeeamTask
             }
         }
 
-         private static List<string> GetFileNames(string[] filePaths)
-        {
-            List<string> fileNames = new List<string>();
-            foreach(string file in filePaths)
-            {
-                fileNames.Add(Path.GetFileName(file));
-            }
+       
 
-            return fileNames;
-        }
-
-        private static bool WasFileModified(string sourceFilePath, string replicatedFilePath)
-        {
-            MD5 md5Instance = MD5.Create();
-
-            byte[] sourceBuffer = File.ReadAllBytes(sourceFilePath);
-            string sourceHash = BitConverter.ToString(md5Instance.ComputeHash(sourceBuffer));
-
-            byte[] replicatedBuffer = File.ReadAllBytes(replicatedFilePath);
-            string replicatedHash = BitConverter.ToString(md5Instance.ComputeHash(replicatedBuffer));
-
-            
-            if(sourceHash != replicatedHash)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-
-        }
-
-        private static void AddLinesToLog(string logFile, string line)
-        {
-            _logLines.Add(line);
-
-            if (logFile != null)
-            {
-                foreach (string missingLine in _logLines)
-                {
-                    string currentMinutes = DateTime.Now.TimeOfDay.Minutes.ToString();
-                    string currentSeconds = DateTime.Now.TimeOfDay.Seconds.ToString();
-                    string message = "["+currentMinutes +","+ currentSeconds +"] " + missingLine + "\n";
-                   
-                   File.AppendAllText(logFile, message);
-                }
-
-                _logLines.Clear();
-            }
-        }
 
     }
 }
